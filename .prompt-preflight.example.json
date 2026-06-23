@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "mode": "block",
+  "threshold": 45,
+  "max_questions": 3
+}

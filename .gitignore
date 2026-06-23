@@ -1,0 +1,60 @@
+# macOS / editor noise
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Python caches and test output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Virtual environments and packaging output
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+
+# Logs, temp files, and local scratch output
+*.log
+*.tmp
+*.bak
+tmp/
+temp/
+
+# Generated benchmark reports
+benchmark-results*.json
+
+# Raw screen recordings and large local captures.
+# Commit compressed README assets under docs/assets/ instead.
+*.mov
+*.mp4
+*.webm
+Screen Recording*
+!docs/assets/
+!docs/assets/*.gif
+!docs/assets/*.png
+!docs/assets/*.jpg
+!docs/assets/*.jpeg
+!docs/assets/*.svg
+
+# Local environment/config files
+.env
+.env.*
+!.env.example
+.prompt-preflight.json
+!.prompt-preflight.example.json
+
+# Local Codex/agent state. Do not ignore .codex-plugin/.
+.codex/
+.agents/

@@ -1,0 +1,31 @@
+{
+  "name": "prompt-preflight",
+  "version": "0.3.0+codex.20260623010206",
+  "description": "Catch underspecified requests before they become expensive model turns.",
+  "author": {
+    "name": "Prompt Preflight contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "prompts",
+    "clarification",
+    "token-efficiency",
+    "productivity"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Prompt Preflight",
+    "shortDescription": "Clarify vague requests before model work begins.",
+    "longDescription": "Prompt Preflight runs locally before a prompt reaches Codex. It pauses costly, underspecified work and asks up to three targeted questions, while letting clear requests and conversational follow-ups pass through.",
+    "developerName": "Prompt Preflight contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Check this prompt before I send it.",
+      "Explain why this request is ambiguous.",
+      "Help me turn this idea into an actionable prompt."
+    ]
+  }
+}
