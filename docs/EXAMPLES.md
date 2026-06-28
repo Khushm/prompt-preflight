@@ -4,6 +4,8 @@ This page shows common vague prompts that make AI agents guess, plus stronger te
 
 Use these patterns when Prompt Preflight pauses a request. Fill in the brackets, remove anything irrelevant, and send the clarified prompt.
 
+The canonical benchmark prompt library lives at [`src/prompt_preflight/data/vague_prompts.txt`](../src/prompt_preflight/data/vague_prompts.txt). Add new vague-prompt examples there first so Codex, Claude Code, Kiro, and the benchmark stay aligned.
+
 ## Quick formula
 
 Most useful prompts answer four questions:
@@ -30,6 +32,7 @@ Vague prompts people use:
 - Fix it
 - Fix this bug
 - Fix checkout
+- Fix the checkout bug
 - Fix the login bug
 - Fix production issue
 - Fix the flaky tests
@@ -76,6 +79,7 @@ Vague prompts people use:
 - Implement auth
 - Add notifications
 - Build a chat feature
+- Build a customer portal
 - Create a plugin
 - Implement the feature
 
@@ -204,6 +208,7 @@ Vague prompts people use:
 - Optimize performance
 - Optimize the database
 - Optimize this query
+- Optimize the onboarding flow
 - Optimize costs
 - Improve scalability
 
@@ -241,8 +246,10 @@ Vague prompts people use:
 
 - Deploy this to production
 - Deploy everything
+- Deploy the worker
 - Make deployment safer
 - Migrate the database
+- Migrate the legacy data
 - Migrate users
 - Upgrade infrastructure
 - Upgrade the whole project
@@ -404,10 +411,17 @@ Preserve existing project archive behavior.
 Verify with API tests for owner, admin, member, and anonymous users.
 ```
 
-## Data, reports, and analytics
+## Data analysis, reports, and analytics
 
 Vague prompts people use:
 
+- Analyze the data
+- Analyze retention trends
+- Make a chart
+- Summarize the spreadsheet
+- Find insights
+- Calculate the metrics
+- Visualize sales data
 - Generate a nice report
 - Create a reporting system
 - Integrate analytics
@@ -417,14 +431,17 @@ Vague prompts people use:
 Template:
 
 ```text
-Create [report/dashboard/analytics event] for [audience/use case].
+Analyze/create [report/dashboard/chart/analytics event] for [audience/use case].
 
 Questions it should answer:
 - [question 1]
 - [question 2]
 
 Data source:
-[tables, events, API, file]
+[tables, events, API, CSV, spreadsheet, or file]
+
+Metrics:
+[revenue, churn, conversion, retention, count, average, trend, etc.]
 
 Filters/grouping:
 [date range, user, account, status, etc.]
@@ -439,12 +456,12 @@ Success criteria:
 Example:
 
 ```text
-Create a weekly usage report for workspace admins.
-It should answer: active users, documents created, and failed exports.
-Data source: `usage_events` table.
-Filters: workspace and date range.
-Output: dashboard table with CSV export.
-Verify with a fixture workspace and expected totals.
+Analyze `sales.csv` for the revenue team.
+Questions: which regions grew fastest month over month, and which product lines declined?
+Metrics: revenue, order count, average order value, and conversion rate.
+Group by month, region, and product line.
+Output: one markdown table, one chart recommendation, and a short trend summary.
+Verify totals against the raw CSV row count and revenue sum.
 ```
 
 ## Image generation
@@ -456,6 +473,7 @@ Vague prompts people use:
 - Draw a cat
 - Illustrate a hero image
 - Make a product photo
+- Create a product hero image
 - Paint a portrait
 - Render a house
 - Create a poster
@@ -483,47 +501,142 @@ shallow depth of field,
 16:9 landscape.
 ```
 
-## Research and writing
-
-Prompt Preflight is conservative for writing and research today, but these templates are still useful.
+## Writing
 
 Vague prompts people use:
 
-- Research this
 - Summarize it
 - Write a better intro
 - Make this sound professional
-- Explain this better
+- Rewrite this email
+- Draft the announcement
+- Create website copy
+- Improve the proposal
+- Write a case study
+- Write a newsletter
+- Edit this for clarity
 
 Template:
 
 ```text
-[Research/Summarize/Rewrite/Explain] [specific topic or text].
+[Write/Rewrite/Summarize/Edit] [specific content].
 
 Audience:
 [who will read it]
 
-Goal:
-[decision, learning, persuasion, documentation]
+Purpose:
+[what the writing should accomplish]
 
-Scope:
-[what to include and exclude]
+Source material:
+[text, notes, links, transcript, outline, or context to use]
 
-Format:
-[bullets, memo, table, FAQ, outline]
+Include/exclude:
+[key points, boundaries, claims, examples, or things to avoid]
 
-Quality bar:
-[citations, examples, tone, length]
+Tone, length, and format:
+[professional/casual/technical/etc., word count, bullets/memo/email/blog/etc.]
 ```
 
 Example:
 
 ```text
-Summarize this design doc for engineering managers.
-Goal: help them decide whether to approve the migration.
-Include risks, timeline, rollback plan, and unresolved questions.
-Exclude implementation details below the API level.
-Format as a one-page memo with bullets.
+Rewrite this launch email for existing beta users.
+Audience: engineering managers who already tried the product.
+Purpose: get them to enable Prompt Preflight for their team.
+Source material: use the three bullet points below and do not invent customer names.
+Tone, length, and format: concise, practical, friendly; under 180 words; email format with subject line.
+```
+
+## Research
+
+Vague prompts people use:
+
+- Research this topic
+- Research compliance tools
+- Compare the options
+- Find the best tool
+- Investigate competitors
+- Look into pricing
+- Evaluate vendors
+- Research the market
+- Find sources
+- Compare databases
+- Investigate this trend
+
+Template:
+
+```text
+[Research/Compare/Investigate/Evaluate] [specific topic/options] for [decision/use case].
+
+Research question:
+[the decision or question the research should answer]
+
+Scope:
+[sources, date range, geography, market segment, and exclusions]
+
+Criteria:
+[cost, features, risks, implementation effort, maturity, etc.]
+
+Citation needs:
+[official sources, recent sources, peer-reviewed sources, links, or none]
+
+Format:
+[summary, table, recommendation, scorecard, annotated links]
+```
+
+Example:
+
+```text
+Research SOC 2 automation alternatives for a seed-stage SaaS team.
+Question: which option is practical before our first enterprise deal?
+Scope: current products available in the US; exclude custom consulting-only vendors.
+Criteria: cost, implementation effort, audit readiness, integrations, and founder time required.
+Format: markdown comparison table plus a recommendation.
+Use official pricing/docs links where available.
+```
+
+## Presentations
+
+Vague prompts people use:
+
+- Create a presentation
+- Make a slide deck
+- Prepare slides
+- Create training slides
+- Design a pitch deck
+- Make this presentation better
+- Create investor slides
+- Build a quarterly review deck
+- Polish the slides
+- Summarize this into slides
+- Create a webinar deck
+
+Template:
+
+```text
+Create a [slide count]-slide [deck/presentation] for [audience].
+
+Goal:
+[decision, update, pitch, teaching outcome, or call to action]
+
+Storyline:
+[sections, key message, and takeaways]
+
+Source material:
+[notes, metrics, transcript, document, or links to use]
+
+Style and constraints:
+[brand, visual style, amount of text, chart needs, speaker notes, timing]
+```
+
+Example:
+
+```text
+Create a 10-slide investor deck for seed-stage AI developer-tool buyers.
+Goal: convince investors to take a first meeting.
+Storyline: problem, existing retry-loop cost, product, demo, traction, market, GTM, competition, team, ask.
+Source material: use the metrics in `traction-notes.md`; do not invent revenue.
+Style and constraints: clean technical SaaS style, one message per slide, include speaker notes for slides 1 and 10.
 ```
 
 ## Tiny prompts that are often okay

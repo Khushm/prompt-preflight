@@ -109,6 +109,53 @@ class AnalyzerTests(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 self.assertEqual(classify_intent(prompt), expected)
 
+    def test_content_domain_intent_routing_matrix(self) -> None:
+        cases = {
+            "Write a better intro": "writing",
+            "Make this sound professional": "writing",
+            "Summarize it": "writing",
+            "Research this topic": "research",
+            "Compare vendor options": "research",
+            "Look into pricing": "research",
+            "Analyze the data": "data_analysis",
+            "Make a chart": "data_analysis",
+            "Analyze churn": "data_analysis",
+            "Create a presentation": "presentation",
+            "Make a slide deck": "presentation",
+            "Create investor slides": "presentation",
+        }
+        for prompt, expected in cases.items():
+            with self.subTest(prompt=prompt):
+                self.assertEqual(classify_intent(prompt), expected)
+
+    def test_vague_content_domains_use_domain_specific_feedback(self) -> None:
+        cases = {
+            "Write a better intro": ("writing", "audience", "tone"),
+            "Research this topic": ("research", "sources", "criteria"),
+            "Analyze the data": ("data_analysis", "dataset", "metric"),
+            "Create a presentation": ("presentation", "audience", "slide"),
+        }
+        for prompt, (intent, expected_question_word, expected_rewrite_word) in cases.items():
+            with self.subTest(prompt=prompt):
+                result = analyze_prompt(prompt)
+                self.assertTrue(result.should_clarify, result)
+                self.assertEqual(result.intent, intent)
+                self.assertIn(expected_question_word, " ".join(result.questions).lower())
+                self.assertIn(expected_rewrite_word, result.suggested_prompt.lower())
+                self.assertNotIn("files/components", " ".join(result.questions).lower())
+                self.assertNotIn("platform or stack", " ".join(result.questions).lower())
+
+    def test_detailed_content_domain_prompts_pass(self) -> None:
+        prompts = [
+            "Write a 500-word blog post for startup founders explaining how Prompt Preflight reduces AI-agent retry loops, using a practical tone and three examples.",
+            "Research current SOC 2 alternatives for a seed-stage SaaS and compare cost, implementation effort, and audit readiness in a markdown table with links to official sources.",
+            "Analyze sales.csv by month and region, calculate revenue and conversion rate, and output a table plus a short summary of trends.",
+            "Create a 10-slide investor deck for seed-stage AI developer tool buyers with problem, market, product, traction, GTM, and ask sections.",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertPasses(prompt)
+
     def test_image_hook_feedback_is_domain_specific(self) -> None:
         result = process_payload({"prompt": "Create a car image"})
         reason = result["reason"].lower()
