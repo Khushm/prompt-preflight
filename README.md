@@ -498,10 +498,16 @@ The telemetry file stores only aggregate fields:
 
 It does not store prompt text, suggested rewrites, clarification questions, reason strings, file contents, or conversation history.
 
-Generate a report:
+Generate a report from the project directory (or any parent directory that contains `.prompt-preflight.json`):
 
 ```bash
 python3 scripts/prompt_preflight.py --telemetry-report
+```
+
+When no path is passed, the command loads `.prompt-preflight.json` and uses the configured `telemetry.path`. To point at a different project directory:
+
+```bash
+python3 scripts/prompt_preflight.py --cwd /path/to/project --telemetry-report
 ```
 
 Generate JSON:
@@ -510,7 +516,7 @@ Generate JSON:
 python3 scripts/prompt_preflight.py --telemetry-report --json
 ```
 
-If you configured a custom telemetry path, pass it to the report command:
+You can still pass an explicit telemetry file path:
 
 ```bash
 python3 scripts/prompt_preflight.py \
