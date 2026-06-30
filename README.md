@@ -2,7 +2,7 @@
 
 > Catch underspecified requests before they become expensive model turns.
 
-Prompt Preflight is a local Codex plugin, Claude Code plugin, Kiro hook, and standalone CLI that checks whether a prompt is specific enough to act on. When ambiguity and the cost of being wrong are both high, it pauses the request and gives the user:
+Prompt Preflight is a local Codex plugin, Claude Code plugin, Kiro hook, and standalone CLI that checks whether a prompt is safe and specific enough to act on. It now looks at prompt clarity, missing context, output expectations, high-risk operations, plan-first needs, and likely secrets before an AI agent spends a model turn. When ambiguity or risk is high, it pauses the request and gives the user:
 
 1. Their original prompt.
 2. A domain-aware example of a stronger prompt.
@@ -110,10 +110,10 @@ Your prompt:
   "Create a car image"
 
 Try asking:
-  "Create a [photorealistic/illustrated/3D] image of a car with
-   [key colors, materials, and distinctive details], in [setting/background],
-   viewed from [camera angle/composition], with [lighting/mood],
-   in [aspect ratio]."
+  "Task: Create a [photorealistic/illustrated/3D] image of a car with
+   [key colors, materials, and distinctive details]. Context: [setting/background],
+   [camera angle/composition], and [lighting/mood]. Output format: [aspect ratio,
+   resolution, file type, or transparent background]."
 
 Fill in the brackets by answering:
 1. What should the car look like?
@@ -153,9 +153,12 @@ The model receives a target, outcome, boundaries, and definition of done before 
 - Includes software, image-generation, and content feedback profiles.
 - Shows a tailored rewrite instead of only saying “be more specific.”
 - Structures rewrites around task, context, output format, examples, and self-checks.
+- Detects likely secrets and redacts them in user-facing feedback.
+- Adds risk and plan-first checks for production deploys, migrations, destructive actions, and broad repo changes.
+- Checks for missing attachments or referenced source files without reading file contents.
 - Asks at most three high-value questions.
 - Lets clear prompts and conversational follow-ups pass through.
-- Supports a one-time `[preflight:skip]` bypass.
+- Supports a one-time `[preflight:skip]` bypass for normal clarity/risk checks; likely-secret privacy blocks are not bypassed.
 - Supports configurable block and nudge modes.
 - Fails open if hook input is malformed.
 - Provides structured JSON for evaluation and debugging.
@@ -169,6 +172,15 @@ Prompt Preflight estimates three things:
 3. **Impact:** How expensive would a wrong interpretation be?
 
 It interrupts only when the prompt is actionable and both ambiguity and impact cross the configured threshold. This prevents the plugin from interrogating users about simple questions, confirmations, or already-specific work.
+
+The analyzer also emits check categories in JSON output:
+
+- `clarity`: subjective or underspecified wording
+- `context`: missing files, components, attachments, data, audience, source material, or scope
+- `output_contract`: missing format, verification, examples, or success criteria
+- `risk`: production, migration, destructive, security-sensitive, or broad-scope work
+- `plan_first`: work that should start with a plan and confirmation
+- `privacy`: likely secrets or credentials in the prompt
 
 Current domain profiles include:
 
@@ -205,7 +217,7 @@ Inspect the full analysis:
 python3 scripts/prompt_preflight.py --json "Rewrite the whole project"
 ```
 
-Structured output includes the detected `intent`, ambiguity score, impact score, reasons, questions, and suggested prompt.
+Structured output includes the detected `intent`, ambiguity score, impact score, severity, check categories, reasons, questions, and suggested prompt. If a likely secret is detected, JSON output uses the redacted prompt text.
 
 ## Benchmark vague-prompt detection
 
@@ -280,7 +292,7 @@ should receive content-specific feedback about audience, source material, resear
 With the current default threshold, the benchmark catches:
 
 ```text
-166 / 168 vague prompts
+168 / 168 vague prompts
 12 / 12 image-generation prompts
 12 / 12 writing prompts
 11 / 11 research prompts
@@ -288,14 +300,14 @@ With the current default threshold, the benchmark catches:
 13 / 13 presentation prompts
 ```
 
-The two current misses are:
+Every benchmark prompt is currently caught. The two prompts that were the last to be tuned:
 
 ```text
 Fix the flaky tests
 Generate more tests
 ```
 
-are now caught by the output-format check. That check asks what the final result should look like when a short actionable prompt lacks structure, while avoiding false positives when the prompt already names a concrete file or source.
+are now caught after recent analyzer tuning (output-format and context checks), while specific prompts that already name a concrete file or source still pass through.
 
 These calibration cases show why the benchmark is not just a vanity metric: it gives maintainers concrete prompts to discuss, tune, and convert into regression tests when the desired behavior is clear.
 
@@ -567,6 +579,8 @@ Prompt text is analyzed locally. Prompt Preflight does not:
 - Invoke a cheaper model to decide whether an expensive model should run
 - Modify files during prompt analysis
 
+Prompt Preflight can detect common credential shapes such as API keys, tokens, password assignments, private key blocks, and cloud access keys. When that happens, it blocks before the model sees the prompt, redacts the credential in feedback, and asks the user to replace it with a placeholder. It can also check whether referenced source files exist, but it only checks file names/paths and does not read file contents.
+
 As with any local plugin, review `.codex-plugin/plugin.json`, `hooks/hooks.json`, and `scripts/prompt_preflight_hook.py` before trusting the hook.
 
 For Claude Code, review `.claude-plugin/plugin.json`, `hooks/claude-hooks.json`, and `scripts/prompt_preflight_claude_hook.py`.
@@ -579,7 +593,7 @@ For Kiro, review the generated `.kiro/hooks/prompt-preflight.json` file and `scr
 - Domain coverage is intentionally narrow and high-precision today.
 - Clarification can add friction when the user prefers the model to make assumptions.
 - Token savings are task-dependent; telemetry estimates avoided retry turns, not exact token savings.
-- Prompts may use `[preflight:skip]` when interruption is not worthwhile.
+- Prompts may use `[preflight:skip]` when interruption is not worthwhile, except for likely-secret privacy blocks.
 
 Incorrect classifications should become regression tests. Run a questionable prompt with `--json` and capture its detected intent, reasons, and questions.
 
