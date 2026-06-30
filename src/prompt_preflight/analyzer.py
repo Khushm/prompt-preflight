@@ -96,7 +96,7 @@ IMAGE_FORMAT_RE = re.compile(
 )
 WRITING_REQUEST_RE = re.compile(
     r"\b(?:create|draft|edit|improve|rewrite|write|proofread|polish|summari[sz]e|make)\b.*\b(?:announcement|"
-    r"article|blog|case study|copy|doc(?:ument)?|draft|email|essay|intro(?:duction)?|memo|message|newsletter|"
+    r"article|blog|case study|content|copy|doc(?:ument)?|draft|email|essay|intro(?:duction)?|memo|message|newsletter|post|press release|release notes|"
     r"proposal|readme|report|summary|tone|writing)\b|\bmake\s+this\s+sound\b|"
     r"\bedit\s+this\s+for\s+clarity\b|\bsummari[sz]e\s+(?:it|this|the)\b",
     re.IGNORECASE,
