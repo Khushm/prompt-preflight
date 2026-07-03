@@ -48,6 +48,7 @@ def process_payload(payload: dict[str, Any]) -> tuple[int, str, str]:
 
     analysis = analyze_prompt(
         prompt,
+        config=config,
         threshold=config.threshold,
         max_questions=config.max_questions,
         cwd=payload.get("cwd"),
@@ -63,7 +64,7 @@ def process_payload(payload: dict[str, Any]) -> tuple[int, str, str]:
     if not analysis.should_clarify:
         return 0, "", ""
 
-    if config.mode == "nudge":
+    if analysis.decision == "nudge":
         return (
             0,
             nudge_message(

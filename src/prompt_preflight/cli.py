@@ -92,8 +92,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     prompt = " ".join(args.prompt).strip() if args.prompt else sys.stdin.read().strip()
+    # Load config to support per-check policies in CLI
+    from .config import load_config
+    config = load_config(args.cwd or Path.cwd())
+    
     analysis = analyze_prompt(
         prompt,
+        config=config,
         threshold=max(0, min(100, args.threshold)),
         max_questions=max(1, min(5, args.max_questions)),
         cwd=args.cwd or Path.cwd(),

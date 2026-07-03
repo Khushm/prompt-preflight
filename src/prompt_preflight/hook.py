@@ -70,6 +70,7 @@ def process_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
 
     analysis = analyze_prompt(
         prompt,
+        config=config,
         threshold=config.threshold,
         max_questions=config.max_questions,
         cwd=payload.get("cwd"),
@@ -86,7 +87,7 @@ def process_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     message = clarification_message(analysis)
-    if config.mode == "nudge":
+    if analysis.decision == "nudge":
         return {
             "hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",

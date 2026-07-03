@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from pathlib import Path
 import re
-from typing import Iterable
+from typing import Iterable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .config import Config
 
 from .templates import questions_for_missing_fields, validate_structured_prompt
 
@@ -201,6 +204,7 @@ class Analysis:
     checks: tuple[str, ...] = ()
     severity: str = "low"
     redacted_prompt: str | None = None
+    decision: str = "allow"
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)
@@ -338,6 +342,9 @@ def suggest_rewrite(prompt: str, intent: str | None = None) -> str:
     """Create a prompt-shaped example that preserves the user's likely intent."""
     raw_prompt = (prompt or "").strip()
     text = " ".join(raw_prompt.split())
+    def _is_enabled(cat: str) -> bool:
+        return config.policy_for(cat) != "disable" if config else True
+
     intent = intent or classify_intent(text)
 
     if intent == "privacy":
@@ -481,6 +488,7 @@ def suggest_rewrite(prompt: str, intent: str | None = None) -> str:
 def analyze_prompt(
     prompt: str,
     *,
+    config: Config | None = None,
     threshold: int = 45,
     max_questions: int = 3,
     cwd: str | Path | None = None,
@@ -494,15 +502,21 @@ def analyze_prompt(
 
     raw_prompt = (prompt or "").strip()
     text = " ".join(raw_prompt.split())
+    def _is_enabled(cat: str) -> bool:
+        return config.policy_for(cat) != "disable" if config else True
+
     lowered = text.lower()
     words = _words(text)
+    def _is_enabled(cat: str) -> bool:
+        return config.policy_for(cat) != "disable" if config else True
+
 
     if not text:
         return Analysis(text, False, 0, 0, 0, (), ())
 
     secret_findings = sensitive_findings(text)
     redacted_text = redact_sensitive(text) if secret_findings else None
-    if secret_findings:
+    if secret_findings and (not config or config.policy_for("privacy") != "disable"):
         return Analysis(
             text,
             True,
@@ -519,6 +533,7 @@ def analyze_prompt(
             checks=("privacy",),
             severity="high",
             redacted_prompt=redacted_text,
+            decision="block",
         )
 
     if any(marker in lowered for marker in BYPASS_MARKERS):
@@ -531,6 +546,7 @@ def analyze_prompt(
             ("one-time bypass marker",),
             (),
             bypassed=True,
+            decision="allow",
         )
 
     is_followup = bool(FOLLOWUP_RE.fullmatch(text))
@@ -539,12 +555,12 @@ def analyze_prompt(
     intent = classify_intent(text)
 
     template_validation = validate_structured_prompt(raw_prompt, intent)
-    if template_validation and template_validation.missing_required:
+    if template_validation and template_validation.missing_required and (_is_enabled("template_contract") or _is_enabled("output_contract")):
         missing = template_validation.missing_required
         ambiguity = _clamp(48 + 7 * len(missing))
         impact = 55 if ACTION_RE.search(text) else 45
         score = _clamp(round((ambiguity * impact) ** 0.5))
-        return Analysis(
+        ret = Analysis(
             text,
             True,
             score,
@@ -561,6 +577,40 @@ def analyze_prompt(
             severity="medium" if len(missing) >= 2 or score >= threshold else "low",
             redacted_prompt=redacted_text,
         )
+        if not config or config.checks is None:
+            decision = config.mode if config else "block"
+            d = ret.to_dict()
+            d["decision"] = decision
+            if ret.redacted_prompt:
+                d["prompt"] = text
+            return Analysis(**d)
+        else:
+            sev_val = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(ret.severity, 1)
+            has_block = False
+            has_nudge = False
+            for chk in ret.checks:
+                policy = config.policy_for(chk)
+                block_thresh_val = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(config.threshold_for("block"), 3)
+                nudge_thresh_val = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(config.threshold_for("nudge"), 2)
+                if policy == "block" and sev_val >= block_thresh_val:
+                    has_block = True
+                elif policy == "nudge" and sev_val >= nudge_thresh_val:
+                    has_nudge = True
+            
+            if has_block:
+                decision = "block"
+            elif has_nudge:
+                decision = "nudge"
+            else:
+                decision = "allow"
+            
+            d = ret.to_dict()
+            if decision == "allow":
+                d["should_clarify"] = False
+            d["decision"] = decision
+            if ret.redacted_prompt:
+                d["prompt"] = text
+            return Analysis(**d)
 
     is_image_request = intent == "image_generation"
     is_writing_request = intent == "writing"
@@ -570,6 +620,9 @@ def analyze_prompt(
     is_content_request = intent in {"writing", "research", "data_analysis", "presentation"}
     action_matches = ACTION_RE.findall(text)
     is_action = bool(action_matches)
+
+    def _is_enabled(cat: str) -> bool:
+        return config.policy_for(cat) != "disable" if config else True
 
     # Do not interrupt conversation, explanations, confirmations, or lightweight prose.
     if is_followup or (is_question and not is_action) or (is_creative and not HIGH_IMPACT_RE.search(text)):
@@ -620,14 +673,14 @@ def analyze_prompt(
         ambiguity += 14
         reasons.append("short request")
 
-    if vague_terms:
+    if vague_terms and _is_enabled('clarity'):
         checks.append("clarity")
         ambiguity += min(28, 12 + 4 * len(vague_terms))
         reasons.append("subjective or vague language: " + ", ".join(vague_terms[:4]))
         if not is_image_request and not is_content_request:
             questions.append("What observable result would count as the desired improvement?")
 
-    if is_action and not has_anchor and not is_image_request and not is_content_request:
+    if is_action and not has_anchor and not is_image_request and not is_content_request and _is_enabled('context'):
         checks.append("context")
         ambiguity += 18
         reasons.append("no concrete file, component, URL, issue, or identifier")
@@ -645,6 +698,7 @@ def analyze_prompt(
         and not is_image_request
         and not is_content_request
         and (vague_terms or len(words) <= 10 or has_broad_scope)
+        and _is_enabled('output_contract')
     ):
         checks.append("output_contract")
         ambiguity += 12
@@ -653,19 +707,19 @@ def analyze_prompt(
             "What should the final output look like—patch, plan, table, JSON, docs, screenshots, or another format?"
         )
 
-    if references_attachment and not has_anchor and len(words) <= 6 and not provided_attachments:
+    if references_attachment and not has_anchor and len(words) <= 6 and not provided_attachments and _is_enabled('context'):
         checks.append("context")
         ambiguity += 16
         reasons.append("referenced attachment or source material is missing")
         questions.append("Can you attach the referenced file, paste the relevant excerpt, or point to the exact path/URL?")
 
-    if missing_files:
+    if missing_files and _is_enabled('context'):
         checks.append("context")
         ambiguity += 18
         reasons.append("referenced file not found: " + ", ".join(missing_files[:3]))
         questions.append("Can you add the referenced file to the workspace or provide the correct path?")
 
-    if requires_plan_first:
+    if requires_plan_first and (_is_enabled('risk') or _is_enabled('plan_first')):
         checks.append("risk")
         checks.append("plan_first")
         impact += 25
@@ -689,21 +743,21 @@ def analyze_prompt(
         has_image_scene = bool(IMAGE_SCENE_RE.search(text))
         has_image_format = bool(IMAGE_FORMAT_RE.search(text))
 
-        if not has_subject_detail:
+        if not has_subject_detail and _is_enabled('context'):
             checks.append("context")
             ambiguity += 8
             reasons.append("subject lacks defining visual details")
             questions.append(
                 f"What should the {subject_label} look like—type, color, materials, condition, and distinctive details?"
             )
-        if not has_image_style:
+        if not has_image_style and _is_enabled('output_contract'):
             checks.append("output_contract")
             ambiguity += 8
             reasons.append("no visual style or mood")
             questions.append(
                 "What visual style and mood do you want—photorealistic, illustrated, cinematic, 3D, or something else?"
             )
-        if not has_image_scene or not has_image_format:
+        if (not has_image_scene or not has_image_format) and _is_enabled('output_contract'):
             checks.append("output_contract")
             ambiguity += 12
             reasons.append("scene, composition, or output format is underspecified")
@@ -717,17 +771,17 @@ def analyze_prompt(
         has_source = bool(SOURCE_RE.search(text))
         has_tone_or_length = bool(TONE_RE.search(text) or LENGTH_RE.search(text) or has_format)
 
-        if not has_audience:
+        if not has_audience and _is_enabled('context'):
             checks.append("context")
             ambiguity += 10
             reasons.append("no writing audience")
             questions.append("Who is the audience, and what should they do or understand after reading it?")
-        if not has_goal or not has_source:
+        if (not has_goal or not has_source) and _is_enabled('context'):
             checks.append("context")
             ambiguity += 12
             reasons.append("writing purpose or source material is underspecified")
             questions.append("What key points, source material, and boundaries should be included or excluded?")
-        if not has_tone_or_length:
+        if not has_tone_or_length and _is_enabled('output_contract'):
             checks.append("output_contract")
             ambiguity += 10
             reasons.append("writing tone, length, or format is underspecified")
@@ -738,17 +792,17 @@ def analyze_prompt(
         has_sources = bool(RESEARCH_SOURCE_RE.search(text))
         has_criteria = bool(CRITERIA_RE.search(text) or has_format)
 
-        if not has_goal:
+        if not has_goal and _is_enabled('context'):
             checks.append("context")
             ambiguity += 10
             reasons.append("no specific research question")
             questions.append("What decision or question should the research answer?")
-        if not has_sources:
+        if not has_sources and _is_enabled('context'):
             checks.append("context")
             ambiguity += 10
             reasons.append("research sources or scope are underspecified")
             questions.append("What sources, date range, geography, and exclusions should be used?")
-        if not has_criteria:
+        if not has_criteria and _is_enabled('output_contract'):
             checks.append("output_contract")
             ambiguity += 10
             reasons.append("research criteria or output format is underspecified")
@@ -759,17 +813,17 @@ def analyze_prompt(
         has_metric = bool(METRIC_RE.search(text))
         has_output = bool(has_format or re.search(r"\b(chart|graph|dashboard|summary|report|table)\b", text, re.IGNORECASE))
 
-        if not has_dataset:
+        if not has_dataset and _is_enabled('context'):
             checks.append("context")
             ambiguity += 12
             reasons.append("no dataset or data source")
             questions.append("What dataset, file, table, or columns should be analyzed?")
-        if not has_metric:
+        if not has_metric and _is_enabled('context'):
             checks.append("context")
             ambiguity += 10
             reasons.append("analysis question or metric is underspecified")
             questions.append("What question, metric, segment, or trend should the analysis answer?")
-        if not has_output:
+        if not has_output and _is_enabled('output_contract'):
             checks.append("output_contract")
             ambiguity += 8
             reasons.append("analysis output format is underspecified")
@@ -781,35 +835,35 @@ def analyze_prompt(
         has_story = bool(PRESENTATION_STORY_RE.search(text))
         has_deck_format = bool(PRESENTATION_FORMAT_RE.search(text) or has_format)
 
-        if not has_audience:
+        if not has_audience and _is_enabled('context'):
             checks.append("context")
             ambiguity += 12
             reasons.append("no presentation audience")
             questions.append("Who is the audience, and what decision or takeaway should the presentation drive?")
-        if not has_goal or not has_story:
+        if (not has_goal or not has_story) and _is_enabled('context'):
             checks.append("context")
             ambiguity += 14
             reasons.append("presentation goal or storyline is underspecified")
             questions.append("What key message, sections, and takeaways should the deck include?")
-        if not has_deck_format:
+        if not has_deck_format and _is_enabled('output_contract'):
             checks.append("output_contract")
             ambiguity += 8
             reasons.append("presentation format is underspecified")
             questions.append("How many slides, what visual style, speaker notes, timing, and example deck/style should it follow?")
 
-    if has_broad_scope and not is_image_request and not is_content_request:
+    if has_broad_scope and not is_image_request and not is_content_request and _is_enabled('risk'):
         checks.append("risk")
         ambiguity += 14
         impact += 20
         reasons.append("broad scope")
 
-    if is_action and not is_image_request and not is_content_request and (has_broad_scope or has_high_impact) and not has_constraint:
+    if is_action and not is_image_request and not is_content_request and (has_broad_scope or has_high_impact) and not has_constraint and _is_enabled('risk'):
         checks.append("risk")
         ambiguity += 10
         reasons.append("no boundaries or invariants")
         questions.append("What must remain unchanged, and are there technical or product constraints?")
 
-    if is_action and not is_image_request and not is_content_request and (has_broad_scope or has_high_impact or vague_terms) and not has_success:
+    if is_action and not is_image_request and not is_content_request and (has_broad_scope or has_high_impact or vague_terms) and not has_success and _is_enabled('output_contract'):
         checks.append("output_contract")
         ambiguity += 8
         reasons.append("no verification or success criteria")
@@ -877,6 +931,38 @@ def analyze_prompt(
         elif score >= 55:
             severity = "medium"
 
+    # Per-check decision engine
+    decision = "allow"
+    if should_clarify:
+        if not config or config.checks is None:
+            decision = config.mode if config else "block"
+        else:
+            sev_val = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(severity, 1)
+            
+            has_block = False
+            has_nudge = False
+            for chk in _unique(checks):
+                policy = config.policy_for(chk)
+                
+                block_thresh = config.threshold_for("block")
+                block_thresh_val = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(block_thresh, 3)
+                
+                nudge_thresh = config.threshold_for("nudge")
+                nudge_thresh_val = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(nudge_thresh, 2)
+
+                if policy == "block" and sev_val >= block_thresh_val:
+                    has_block = True
+                elif policy == "nudge" and sev_val >= nudge_thresh_val:
+                    has_nudge = True
+
+            if has_block:
+                decision = "block"
+            elif has_nudge:
+                decision = "nudge"
+            else:
+                decision = "allow"
+                should_clarify = False
+        
     return Analysis(
         prompt=text,
         should_clarify=should_clarify,
@@ -890,4 +976,5 @@ def analyze_prompt(
         checks=_unique(checks),
         severity=severity,
         redacted_prompt=redacted_text,
+        decision=decision,
     )
