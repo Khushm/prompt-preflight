@@ -4,6 +4,13 @@ This page shows underspecified prompts alongside prompts that Prompt Preflight w
 
 ## Software builds & changes
 
+For stricter copy-paste contracts, see [Structured Prompt Templates](TEMPLATES.md). Prompt Preflight can validate Markdown, XML, and TOML prompt contracts and pause when required fields are missing or still placeholder-only.
+
+The canonical benchmark prompt library lives at [`src/prompt_preflight/data/vague_prompts.txt`](../src/prompt_preflight/data/vague_prompts.txt). Add new vague-prompt examples there first so Codex, Claude Code, Kiro, and the benchmark stay aligned.
+
+The structured prompt template catalog lives at [`src/prompt_preflight/data/prompt_templates.json`](../src/prompt_preflight/data/prompt_templates.json). Add shared template changes there so all integrations stay aligned.
+
+Prompt Preflight also checks for likely secrets, missing context, missing output contracts, and high-risk work that should start with a plan.
 ### Example 1
 **Before (vague):**
 > Build a chat feature
@@ -15,6 +22,62 @@ This page shows underspecified prompts alongside prompts that Prompt Preflight w
 **Before (vague):**
 > Rewrite the frontend
 
+Most useful prompts answer four questions:
+
+```text
+Do [specific action] to [specific target] so that [observable outcome].
+Keep [constraints] unchanged.
+Use [important context, stack, style, or data].
+Verify with [tests, checks, examples, or acceptance criteria].
+```
+
+For model-friendly prompts, especially in Claude, Codex, and other agent workflows, use clear sections instead of one blended paragraph:
+
+```text
+Task:
+[specific thing to do]
+
+Context:
+[source material, files, data, constraints, or background]
+
+Output format:
+[exact structure, length, schema, bullets, table, patch, slides, etc.]
+
+Example/style reference:
+[optional sample when tone or format matters]
+
+Self-check:
+[how to verify constraints, citations, tests, or acceptance criteria]
+```
+
+You can print stricter Markdown, XML, or TOML versions from the CLI:
+
+```bash
+python3 scripts/prompt_preflight.py --template software --template-format md
+python3 scripts/prompt_preflight.py --template image --template-format xml
+python3 scripts/prompt_preflight.py --template research --template-format toml
+```
+
+For high-risk prompts, add a plan-first boundary:
+
+```text
+Plan-first:
+Inspect the relevant context, propose the rollout or change plan, and wait for confirmation before making production, migration, destructive, or broad repository changes.
+```
+
+Never paste real secrets into prompts. Use placeholders instead:
+
+```text
+Use [REDACTED_SECRET] as the example API key.
+```
+
+For image prompts, use:
+
+```text
+Create a [style] image of [specific subject] with [details],
+in [setting/background], viewed from [camera angle/composition],
+with [lighting/mood], in [aspect ratio/output format].
+```
 **After (ready):**
 > Rewrite the `Dashboard` and `Profile` views in React, replacing the legacy Handlebars templates. The outcome must match the current layout identically, without adding new CSS classes. Verify that all existing unit tests in `tests/ui/` pass after the migration.
 
