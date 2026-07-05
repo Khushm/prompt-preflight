@@ -500,6 +500,19 @@ Create `.prompt-preflight.json` in the project where Codex, Claude Code, or Kiro
   "mode": "block",
   "threshold": 45,
   "max_questions": 3,
+  "checks": {
+    "clarity": "nudge",
+    "context": "nudge",
+    "output_contract": "nudge",
+    "template_contract": "block",
+    "risk": "block",
+    "plan_first": "block",
+    "privacy": "block"
+  },
+  "severity_thresholds": {
+    "block": "high",
+    "nudge": "medium"
+  },
   "telemetry": {
     "enabled": false,
     "path": ".prompt-preflight-telemetry.jsonl"
@@ -507,12 +520,18 @@ Create `.prompt-preflight.json` in the project where Codex, Claude Code, or Kiro
 }
 ```
 
-- `block`: stop the vague submission before model work.
-- `nudge`: allow the turn while instructing the host assistant to clarify first.
-- `threshold`: raise it to interrupt less often.
+- `mode`: legacy global behavior (block or nudge). Backward compatible if `checks` is missing.
+- `threshold`: legacy global numeric threshold.
+- `checks`: per-check policy ("block", "nudge", "disable", "off"). Evaluated before `mode`.
+- `severity_thresholds`: defines the severity ("low", "medium", "high") needed to trigger a "block" or "nudge" per check.
 - `max_questions`: limit clarification questions from 1 to 5.
 - `enabled`: disable Prompt Preflight for a project.
 - `telemetry`: optional local-only counts; disabled by default.
+
+### Per-Check Safe Defaults
+If a specific check is not explicitly set in `checks`, Prompt Preflight uses these safe defaults:
+- `privacy`, `risk`, and `plan_first`: **block**
+- `clarity`, `context`, `output_contract`, and `template_contract`: **nudge** (or the global `mode` if configured)
 
 Bypass one request without changing configuration:
 

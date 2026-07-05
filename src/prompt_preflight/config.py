@@ -18,6 +18,21 @@ class Config:
     max_questions: int = 3
     telemetry_enabled: bool = False
     telemetry_path: Path | None = None
+    checks: dict[str, str] | None = None
+    severity_thresholds: dict[str, str] | None = None
+
+    def policy_for(self, category: str) -> str:
+        if self.checks is not None:
+            return self.checks.get(category, "disable")
+        if category == "privacy":
+            return "block"
+        return self.mode
+
+    def threshold_for(self, mode: str) -> str:
+        defaults = {"block": "high", "nudge": "medium"}
+        if self.severity_thresholds is not None:
+            return self.severity_thresholds.get(mode, defaults.get(mode, "high"))
+        return defaults.get(mode, "high")
 
 
 def _telemetry_path_from_raw(raw: dict[str, Any], directory: Path) -> Path:
@@ -71,13 +86,46 @@ def load_config(cwd: str | Path | None = None) -> Config:
             try:
                 raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
                 telemetry_enabled, telemetry_path = _telemetry_settings(raw, directory)
+                
+                raw_mode = raw.get("mode")
+                mode = raw_mode if raw_mode in {"block", "nudge"} else "block"
+                
+                checks = None
+                raw_checks = raw.get("checks")
+                if raw_checks is not None and isinstance(raw_checks, dict):
+                    checks = {}
+                    for category in ["clarity", "context", "output_contract", "template_contract", "risk", "plan_first", "privacy"]:
+                        if category in raw_checks:
+                            val = raw_checks[category]
+                            if val in ("block", "nudge", "disable", "off"):
+                                checks[category] = "disable" if val == "off" else val
+                            else:
+                                checks[category] = "block" if category == "privacy" else (mode if raw_mode in ("block", "nudge") else "nudge")
+                        else:
+                            checks[category] = "block" if category == "privacy" else (mode if raw_mode in ("block", "nudge") else "nudge")
+
+                severity_thresholds = None
+                raw_sev = raw.get("severity_thresholds")
+                if raw_sev is not None and isinstance(raw_sev, dict):
+                    severity_thresholds = {}
+                    for m in ["block", "nudge"]:
+                        val = raw_sev.get(m)
+                        if val in ("low", "medium", "high"):
+                            severity_thresholds[m] = val
+                        else:
+                            severity_thresholds[m] = "high" if m == "block" else "medium"
+                elif raw_sev is not None:
+                    severity_thresholds = {"block": "high", "nudge": "medium"}
+                
                 return Config(
                     enabled=bool(raw.get("enabled", True)),
-                    mode=raw.get("mode", "block") if raw.get("mode") in {"block", "nudge"} else "block",
+                    mode=mode,
                     threshold=max(0, min(100, int(raw.get("threshold", 45)))),
                     max_questions=max(1, min(5, int(raw.get("max_questions", 3)))),
                     telemetry_enabled=telemetry_enabled,
                     telemetry_path=telemetry_path,
+                    checks=checks,
+                    severity_thresholds=severity_thresholds,
                 )
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 return Config()
